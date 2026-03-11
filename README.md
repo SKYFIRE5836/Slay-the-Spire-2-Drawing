@@ -29,8 +29,8 @@
 
 无需安装任何环境，直接下载打包好的独立程序即可使用：
 
-1. 前往本仓库的 [Releases 页面](https://www.google.com/search?q=../../releases) 下载最新版本的 `spire_painter.exe`。
-2. ⚠️ **极其重要**：右键点击 `spire_painter.exe`，选择 **“以管理员身份运行”**（否则全局 P 键急停和底层鼠标模拟将失效）。
+1. 前往本仓库的 [Releases 页面](https://www.google.com/search?q=../../releases) 下载最新版本的 `SlaytheSpire2Drawing.exe`。
+2. ⚠️ **极其重要**：右键点击 `SlaytheSpire2Drawing.exe`，选择 **“以管理员身份运行”**（否则全局 P 键急停和底层鼠标模拟将失效）。
 3. 在软件左侧选择“外部图片”或“输入文字”，生成线稿。
 4. 调整好“精细度”与“绘制速度”。
 5. 切入《杀戮尖塔2》游戏内，找到可以右键作画的墙壁/界面。
