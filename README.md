@@ -9,6 +9,13 @@
 > **“让数字世界的瞬间凝固成琥珀，再用代码将其拓印在尖塔的高墙之上。”**
 
 ---
+## 🆕 最新更新 (v1.1.0)
+* ✂️ **局部裁剪**：新增线稿二次裁剪功能，框选想要的部分直接画。
+* 🧠 **配置记忆**：自动保存你的“窗口置顶”、“精细度”、“速度”等设置，下次打开直接用。
+* 🪟 **体验优化**：窗口启动绝对居中；新增打开本地线稿文件夹按钮；优化整体界面布局。
+* 🐛 **Bug 修复**：彻底修复旧版 `.exe` 在部分电脑上无法生成文字线稿的恶性问题。
+
+---
 
 ## ✨ 核心特性
 
@@ -42,8 +49,8 @@
 ---
 
 ## 📸 界面截图
-<img width="950" height="685" alt="a1df805e9abf5e6399d3b813ef6ba47e" src="https://github.com/user-attachments/assets/88ec899b-c0db-4cc3-bd73-c9c23d4c0ddb" />
-<img width="1920" height="1080" alt="189e052da2a253316f120490856fb89f" src="https://github.com/user-attachments/assets/88f8a58b-a41b-406f-8ee5-b48c05d6dfcf" />
+<img width="949" height="684" alt="界面" src="https://github.com/user-attachments/assets/3ab7065c-9e50-4b1b-a45e-c5bc44d386aa" />
+<img width="1920" height="1080" alt="归终" src="https://github.com/user-attachments/assets/a3a97236-9a25-4840-90c3-7a74192008f7" />
 
 ---
 
