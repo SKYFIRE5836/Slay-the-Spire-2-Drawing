@@ -33,6 +33,8 @@ except:
 
 MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
 
 def move_mouse(x, y):
     ctypes.windll.user32.SetCursorPos(int(x), int(y))
@@ -42,6 +44,12 @@ def right_click_down():
 
 def right_click_up():
     ctypes.windll.user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
+
+def left_click_down():
+    ctypes.windll.user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+
+def left_click_up():
+    ctypes.windll.user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
 # ---------------------------------------------------------
 # 内部弹窗：线稿二次裁剪界面
@@ -183,8 +191,8 @@ class SpirePainterApp:
         self.root = root
         self.root.title("杀戮尖塔2 - 数字琥珀画板")
         
-        window_width = 950
-        window_height = 650
+        window_width = 1200
+        window_height = 800
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         center_x = int((screen_width / 2) - (window_width / 2))
@@ -206,7 +214,8 @@ class SpirePainterApp:
         init_topmost = True
         init_detail = 5
         init_speed = 3
-        
+
+        self.mouse_button_var = tk.StringVar(value="left")
         if os.path.exists(self.config_path):
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
@@ -214,6 +223,8 @@ class SpirePainterApp:
                     init_topmost = conf.get("topmost", True)
                     init_detail = conf.get("detail", 5)
                     init_speed = conf.get("speed", 3)
+                    if "mouse_button" in conf:
+                        self.mouse_button_var.set(conf["mouse_button"])
             except:
                 pass
                 
@@ -308,6 +319,15 @@ class SpirePainterApp:
         self.speed_slider.config(command=self.save_config) # 设完默认值再绑定
         self.speed_slider.pack(side="left", padx=5)
 
+        # 添加按键选择框架
+        button_frame = tk.Frame(self.left_panel)
+        button_frame.pack(fill="x", padx=10, pady=(0, 15))
+        tk.Label(button_frame, text="鼠标按键:", font=("Arial", 9, "bold")).pack(side="left")
+        tk.Radiobutton(button_frame, text="左键", variable=self.mouse_button_var, value="left",
+                       command=self.save_config).pack(side="left", padx=5)
+        tk.Radiobutton(button_frame, text="右键", variable=self.mouse_button_var, value="right",
+                       command=self.save_config).pack(side="left", padx=5)
+
         # --- 启动按钮 ---
         self.btn_start = tk.Button(self.left_panel, text="🚀 开始绘制 (进入数字琥珀)", bg="#4CAF50", fg="white", 
                                    font=("Arial", 10, "bold"), command=self.start_digital_amber, state=tk.DISABLED, height=2)
@@ -342,7 +362,8 @@ class SpirePainterApp:
             conf = {
                 "topmost": is_top,
                 "detail": self.detail_slider.get(),
-                "speed": self.speed_slider.get()
+                "speed": self.speed_slider.get(),
+                "mouse_button": self.mouse_button_var.get()
             }
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(conf, f)
@@ -373,7 +394,7 @@ class SpirePainterApp:
             
         try:
             img = Image.open(image_path)
-            max_size = (480, 440) 
+            max_size = (600, 580)
             img.thumbnail(max_size, Image.Resampling.LANCZOS)
             self.tk_preview_image = ImageTk.PhotoImage(img)
             self.preview_label.config(image=self.tk_preview_image, text="", bg="#E0E0E0")
