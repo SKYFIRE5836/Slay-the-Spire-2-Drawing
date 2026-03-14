@@ -16,13 +16,16 @@ import keyboard
 # ---------------------------------------------------------
 abort_drawing = False
 pause_drawing = False
+is_currently_drawing = False  # [新增] 记录当前是否正在执行绘图动作
 
 def trigger_pause():
-    global pause_drawing, abort_drawing
+    global pause_drawing, abort_drawing, is_currently_drawing
     if not abort_drawing and not pause_drawing:
         pause_drawing = True
-        left_click_up()
-        right_click_up()
+        # [核心修复] 只有真正在画图时，才去干涉鼠标
+        if is_currently_drawing: 
+            left_click_up()
+            right_click_up()
         print("\n[暂停] 已触发！请放心进行其他操作。")
 
 def trigger_resume():
@@ -32,11 +35,13 @@ def trigger_resume():
         print("\n[继续] 已触发！恢复绘制。")
 
 def trigger_abort():
-    global abort_drawing, pause_drawing
+    global abort_drawing, pause_drawing, is_currently_drawing
     abort_drawing = True
     pause_drawing = False 
-    left_click_up()
-    right_click_up()
+    # [核心修复] 只有真正在画图时，才去干涉鼠标
+    if is_currently_drawing:
+        left_click_up()
+        right_click_up()
     print("\n[终止] 清单已销毁，内存已释放！")
 
 def handle_p_key(e):
@@ -583,11 +588,7 @@ class SpirePainterApp:
         tut.overrideredirect(True) 
         tut.attributes('-topmost', True)
         
-        w, h = 480, 360
-        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (w // 2)
-        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (h // 2)
-        tut.geometry(f"{w}x{h}+{x}+{y}")
-        
+        # UI 组件部分保持你原来的设计，完全不变
         frame = tk.Frame(tut, bg="#FFFFFF", highlightbackground="#2196F3", highlightthickness=2)
         frame.pack(fill="both", expand=True)
         
@@ -609,13 +610,32 @@ class SpirePainterApp:
         tk.Label(hk_frame, text="[", font=("Microsoft YaHei", 14, "bold"), bg="#F9F9F9", fg="#E53935", width=12, anchor="e").grid(row=2, column=0, pady=10)
         tk.Label(hk_frame, text="强制终止 (彻底销毁任务)", font=("Microsoft YaHei", 10), bg="#F9F9F9", fg="#333333", anchor="w").grid(row=2, column=1, sticky="w", padx=10)
 
-        def on_close():
+        # 修改点 1：加了 event=None，为了兼容按键绑定
+        def on_close(event=None):
             tut.destroy()
             self.is_first_run = False
             self.save_config()
 
         btn_ok = tk.Button(frame, text="我已牢记，开始使用", font=("Microsoft YaHei", 11, "bold"), bg="#2196F3", fg="#FFFFFF", relief="flat", activebackground="#1976D2", activeforeground="#FFFFFF", command=on_close, cursor="hand2")
         btn_ok.pack(pady=(20, 20), ipadx=40, ipady=10)
+
+        # --- 以下是核心修复区 ---
+        
+        # 修改点 2：强制系统结算一次 UI 布局，获取被 DPI 缩放撑开后的真实宽高
+        tut.update_idletasks()
+        actual_w = tut.winfo_reqwidth()
+        actual_h = tut.winfo_reqheight()
+
+        # 修改点 3：根据真实宽高重新计算居中位置
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (actual_w // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (actual_h // 2)
+        
+        # 修改点 4：只给坐标，不给死宽高，让弹窗自由舒展
+        tut.geometry(f"+{x}+{y}")
+        
+        # 修改点 5：终极兜底，绑定 Esc 键并强行抢夺焦点
+        tut.bind("<Escape>", on_close)
+        tut.focus_force()
 
     def on_closing(self):
         trigger_abort()
@@ -949,160 +969,165 @@ class SpirePainterApp:
 
     def draw_logic(self, rx, ry, rw, rh, img_path, mode, current_step, fill_gap, is_left_click):
         global abort_drawing, pause_drawing
-        time.sleep(1) 
-        
-        def check_pause_state(cx, cy):
-            if abort_drawing: return False
-            if pause_drawing:
-                if is_left_click: left_click_up()
-                else: right_click_up()
-                
-                while pause_drawing:
-                    time.sleep(0.1)
-                    if abort_drawing: return False
+
+        is_currently_drawing = True # [新增] 标记开始干预鼠标
+        try:
+            time.sleep(1) 
+            
+            def check_pause_state(cx, cy):
+                if abort_drawing: return False
+                if pause_drawing:
+                    if is_left_click: left_click_up()
+                    else: right_click_up()
                     
-                time.sleep(0.1)
-                move_mouse(cx, cy)
-                time.sleep(0.02)
+                    while pause_drawing:
+                        time.sleep(0.1)
+                        if abort_drawing: return False
+                        
+                    time.sleep(0.1)
+                    move_mouse(cx, cy)
+                    time.sleep(0.02)
+                    if is_left_click: left_click_down()
+                    else: right_click_down()
+                    time.sleep(0.02)
+                return True
+        
+            # ---------------------------------------------------------
+            # 战争迷雾：双十字交叉法 (无缝填涂)
+            # ---------------------------------------------------------
+            if mode == "fill":
+                current_y = ry
+                direction_x = 1 
+                move_mouse(rx, current_y)
+                time.sleep(0.01)
                 if is_left_click: left_click_down()
                 else: right_click_down()
-                time.sleep(0.02)
-            return True
-        
-        # ---------------------------------------------------------
-        # 战争迷雾：双十字交叉法 (无缝填涂)
-        # ---------------------------------------------------------
-        if mode == "fill":
-            current_y = ry
-            direction_x = 1 
-            move_mouse(rx, current_y)
-            time.sleep(0.01)
-            if is_left_click: left_click_down()
-            else: right_click_down()
-            time.sleep(0.01)
-            
-            while current_y <= ry + rh:
-                if abort_drawing: break
+                time.sleep(0.01)
                 
-                start_x = rx if direction_x == 1 else rx + rw
-                end_x = rx + rw if direction_x == 1 else rx
-                
-                dist = abs(end_x - start_x)
-                jump_pixels = current_step * 5 
-                steps = int(max(1, dist // jump_pixels))
-                
-                for i in range(1, steps + 1):
-                    cur_x = start_x + (end_x - start_x) * i / steps
-                    if not check_pause_state(cur_x, current_y): break
-                    move_mouse(cur_x, current_y)
-                    time.sleep(0.002)
-                
-                if abort_drawing: break
-                move_mouse(end_x, current_y)
-                time.sleep(0.005)
-                
-                current_y += fill_gap
-                if current_y <= ry + rh:
-                    if not check_pause_state(end_x, current_y): break
+                while current_y <= ry + rh:
+                    if abort_drawing: break
+                    
+                    start_x = rx if direction_x == 1 else rx + rw
+                    end_x = rx + rw if direction_x == 1 else rx
+                    
+                    dist = abs(end_x - start_x)
+                    jump_pixels = current_step * 5 
+                    steps = int(max(1, dist // jump_pixels))
+                    
+                    for i in range(1, steps + 1):
+                        cur_x = start_x + (end_x - start_x) * i / steps
+                        if not check_pause_state(cur_x, current_y): break
+                        move_mouse(cur_x, current_y)
+                        time.sleep(0.002)
+                    
+                    if abort_drawing: break
                     move_mouse(end_x, current_y)
                     time.sleep(0.005)
                     
-                direction_x *= -1
-            
-            if is_left_click: left_click_up()
-            else: right_click_up()
-            time.sleep(0.1) 
-            
-            if abort_drawing:
-                print("填涂已被强行终止，内存已回收！")
-                return
+                    current_y += fill_gap
+                    if current_y <= ry + rh:
+                        if not check_pause_state(end_x, current_y): break
+                        move_mouse(end_x, current_y)
+                        time.sleep(0.005)
+                        
+                    direction_x *= -1
                 
-            current_x = rx
-            direction_y = 1
-            move_mouse(current_x, ry)
-            time.sleep(0.01)
-            if is_left_click: left_click_down()
-            else: right_click_down()
-            time.sleep(0.01)
-            
-            while current_x <= rx + rw:
-                if abort_drawing: break
+                if is_left_click: left_click_up()
+                else: right_click_up()
+                time.sleep(0.1) 
                 
-                start_y = ry if direction_y == 1 else ry + rh
-                end_y = ry + rh if direction_y == 1 else ry
+                if abort_drawing:
+                    print("填涂已被强行终止，内存已回收！")
+                    return
+                    
+                current_x = rx
+                direction_y = 1
+                move_mouse(current_x, ry)
+                time.sleep(0.01)
+                if is_left_click: left_click_down()
+                else: right_click_down()
+                time.sleep(0.01)
                 
-                dist = abs(end_y - start_y)
-                jump_pixels = current_step * 5 
-                steps = int(max(1, dist // jump_pixels))
-                
-                for i in range(1, steps + 1):
-                    cur_y = start_y + (end_y - start_y) * i / steps
-                    if not check_pause_state(current_x, cur_y): break
-                    move_mouse(current_x, cur_y)
-                    time.sleep(0.002)
-                
-                if abort_drawing: break
-                move_mouse(current_x, end_y)
-                time.sleep(0.005)
-                
-                current_x += fill_gap
-                if current_x <= rx + rw:
-                    if not check_pause_state(current_x, end_y): break
+                while current_x <= rx + rw:
+                    if abort_drawing: break
+                    
+                    start_y = ry if direction_y == 1 else ry + rh
+                    end_y = ry + rh if direction_y == 1 else ry
+                    
+                    dist = abs(end_y - start_y)
+                    jump_pixels = current_step * 5 
+                    steps = int(max(1, dist // jump_pixels))
+                    
+                    for i in range(1, steps + 1):
+                        cur_y = start_y + (end_y - start_y) * i / steps
+                        if not check_pause_state(current_x, cur_y): break
+                        move_mouse(current_x, cur_y)
+                        time.sleep(0.002)
+                    
+                    if abort_drawing: break
                     move_mouse(current_x, end_y)
                     time.sleep(0.005)
                     
-                direction_y *= -1
-            
-            if is_left_click: left_click_up()
-            else: right_click_up()
-            
-            if not abort_drawing:
-                print("迷雾双重填涂完成！内存已自动回收。")
-            return
-            
-        # ---------------------------------------------------------
-        # 线稿边缘绘制
-        # ---------------------------------------------------------
-        img = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
-        edges = cv2.bitwise_not(img) 
-        
-        img_h, img_w = edges.shape
-        scale = min(rw / img_w, rh / img_h)
-        
-        offset_x = rx + (rw - img_w * scale) / 2
-        offset_y = ry + (rh - img_h * scale) / 2
-
-        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-        
-        for contour in contours:
-            if abort_drawing: break
-            if len(contour) == 0: continue
-            
-            start_x = int(offset_x + contour[0][0][0] * scale)
-            start_y = int(offset_y + contour[0][0][1] * scale)
-            
-            if not check_pause_state(start_x, start_y): break
-            move_mouse(start_x, start_y)
-            time.sleep(0.005) 
-            
-            if is_left_click: left_click_down()
-            else: right_click_down()
-            time.sleep(0.005) 
-            
-            for point in contour[1::current_step]:
-                px = int(offset_x + point[0][0] * scale)
-                py = int(offset_y + point[0][1] * scale)
+                    current_x += fill_gap
+                    if current_x <= rx + rw:
+                        if not check_pause_state(current_x, end_y): break
+                        move_mouse(current_x, end_y)
+                        time.sleep(0.005)
+                        
+                    direction_y *= -1
                 
-                if not check_pause_state(px, py): break
-                move_mouse(px, py)
-                time.sleep(0.002) 
+                if is_left_click: left_click_up()
+                else: right_click_up()
+                
+                if not abort_drawing:
+                    print("迷雾双重填涂完成！内存已自动回收。")
+                return
+                
+            # ---------------------------------------------------------
+            # 线稿边缘绘制
+            # ---------------------------------------------------------
+            img = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+            edges = cv2.bitwise_not(img) 
             
-            if is_left_click: left_click_up()
-            else: right_click_up()
-            time.sleep(0.005) 
-        
-        if abort_drawing: print("绘图任务已被强制销毁！")
-        else: print("绘制顺利完成！内存自动释放。")
+            img_h, img_w = edges.shape
+            scale = min(rw / img_w, rh / img_h)
+            
+            offset_x = rx + (rw - img_w * scale) / 2
+            offset_y = ry + (rh - img_h * scale) / 2
+
+            contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+            
+            for contour in contours:
+                if abort_drawing: break
+                if len(contour) == 0: continue
+                
+                start_x = int(offset_x + contour[0][0][0] * scale)
+                start_y = int(offset_y + contour[0][0][1] * scale)
+                
+                if not check_pause_state(start_x, start_y): break
+                move_mouse(start_x, start_y)
+                time.sleep(0.005) 
+                
+                if is_left_click: left_click_down()
+                else: right_click_down()
+                time.sleep(0.005) 
+                
+                for point in contour[1::current_step]:
+                    px = int(offset_x + point[0][0] * scale)
+                    py = int(offset_y + point[0][1] * scale)
+                    
+                    if not check_pause_state(px, py): break
+                    move_mouse(px, py)
+                    time.sleep(0.002) 
+                
+                if is_left_click: left_click_up()
+                else: right_click_up()
+                time.sleep(0.005) 
+            
+            if abort_drawing: print("绘图任务已被强制销毁！")
+            else: print("绘制顺利完成！内存自动释放。")
+        finally:
+            is_currently_drawing = False # [新增] 无论画完还是被强制终止，都解除干预标记
 
 if __name__ == "__main__":
     root = tk.Tk()
