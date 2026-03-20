@@ -349,9 +349,9 @@ class SpirePainterApp:
                 except:
                     pass
         
-        # 标准 16:9 (1280x720) 
+        # 调整大小以显示所有方案，保持16:9比例
         window_width = 1280
-        window_height = 720 
+        window_height = 800  # 增加高度以显示所有方案
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         center_x = int((screen_width / 2) - (window_width / 2))
@@ -377,6 +377,7 @@ class SpirePainterApp:
         init_speed = 3
         init_fill_gap = 10 
         init_is_left_click = False 
+        init_allow_paste = True
         self.is_first_run = True 
         
         if os.path.exists(self.config_path):
@@ -388,6 +389,7 @@ class SpirePainterApp:
                     init_speed = conf.get("speed", 3)
                     init_fill_gap = conf.get("fill_gap", 10)
                     self.is_first_run = conf.get("is_first_run", True)
+                    init_allow_paste = conf.get("allow_paste", True)
                     if "is_left_click" in conf:
                         init_is_left_click = conf["is_left_click"]
                     elif "click_mode" in conf:
@@ -397,6 +399,7 @@ class SpirePainterApp:
                 
         self.topmost_var = tk.BooleanVar(value=init_topmost)
         self.root.attributes('-topmost', self.topmost_var.get())
+        self.allow_paste_var = tk.BooleanVar(value=init_allow_paste)
 
         self.font_map = {
             "微软雅黑 (默认)": "msyh.ttc",
@@ -513,6 +516,23 @@ class SpirePainterApp:
         self.btn_fill_fog = create_flat_button(wrap_fog, "开始扫荡迷雾", lambda: self.start_digital_amber(mode="fill"), bg="#E8F5E9", active_bg="#B2DFDB", fg="#004D40")
         self.btn_fill_fog.pack(fill="x", pady=(5, 0))
 
+        # 方案E：粘贴图片
+        frame_paste = ttk.LabelFrame(self.left_panel, text=" 方案E：粘贴图片 ", padding=(10, 5))
+        frame_paste.pack(side="top", fill="both", expand=True, padx=10, pady=(0, 2))
+        wrap_paste = tk.Frame(frame_paste, bg="#F3F3F3")
+        wrap_paste.pack(expand=True, fill="x")
+        paste_conf_frame = tk.Frame(wrap_paste, bg="#F3F3F3")
+        paste_conf_frame.pack(fill="x", pady=(0, 5))
+        
+        # 允许粘贴勾选框
+        self.allow_paste_var = tk.BooleanVar(value=init_allow_paste)
+        self.chk_allow_paste = tk.Checkbutton(paste_conf_frame, text="允许粘贴 (Ctrl+V)", font=("Microsoft YaHei", 9), variable=self.allow_paste_var, command=self.save_config, bg="#F3F3F3")
+        self.chk_allow_paste.pack(anchor="w")
+        
+        # 手动粘贴按钮
+        self.btn_paste = create_flat_button(wrap_paste, "📋 从剪贴板粘贴", self.paste_from_clipboard, bg="#FFF3E0", active_bg="#FFE0B2", fg="#E65100")
+        self.btn_paste.pack(fill="x", pady=(5, 0))
+
         frame4 = ttk.LabelFrame(self.left_panel, text=" ⚙️ 全局绘制设置 ", padding=(10, 5))
         frame4.pack(side="top", fill="both", expand=True, padx=10, pady=(0, 5))
         wrap4 = tk.Frame(frame4, bg="#F3F3F3")
@@ -575,6 +595,10 @@ class SpirePainterApp:
         
         if self.is_first_run:
             self.root.after(500, self.show_first_run_tutorial)
+        
+        # 绑定Ctrl+V快捷键用于粘贴图片
+        self.root.bind("<Control-v>", lambda e: self.paste_from_clipboard())
+        self.root.bind("<Control-V>", lambda e: self.paste_from_clipboard())
 
     def update_status(self, msg):
         self.status_text.config(state=tk.NORMAL)
@@ -778,7 +802,8 @@ class SpirePainterApp:
                 "speed": int(round(float(self.speed_slider.get()))),
                 "fill_gap": int(round(float(self.fill_gap_slider.get()))),
                 "is_left_click": self.toggle_switch.is_left_click,
-                "is_first_run": getattr(self, 'is_first_run', False)
+                "is_first_run": getattr(self, 'is_first_run', False),
+                "allow_paste": self.allow_paste_var.get()
             }
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(conf, f)
@@ -946,6 +971,34 @@ class SpirePainterApp:
             self.update_status(f"已加载线稿:\n{os.path.basename(file_path)}")
             self.btn_start.config(state=tk.NORMAL)
             self.update_preview_panel(file_path)
+    
+    def paste_from_clipboard(self):
+        """从剪贴板粘贴图片"""
+        if not self.allow_paste_var.get():
+            return
+        
+        trigger_abort()
+        
+        try:
+            # 尝试从剪贴板获取图片
+            clipboard_img = ImageGrab.grabclipboard()
+            
+            if isinstance(clipboard_img, Image.Image):
+                # 保存粘贴的图片到临时文件
+                temp_path = os.path.join(self.output_dir, "clipboard_temp.png")
+                clipboard_img.save(temp_path, format="PNG")
+                
+                # 使用现有的线稿生成流程处理粘贴的图片
+                self.last_raw_image_path = temp_path
+                self.btn_reprocess.config(state=tk.NORMAL)
+                self.generate_image_lineart()
+                
+                self.update_status(f"✅ 已成功粘贴图片！")
+            else:
+                self.update_status("❌ 剪贴板中没有图片数据！")
+        except Exception as e:
+            self.update_status(f"❌ 粘贴失败：{str(e)}")
+            print(f"粘贴错误：{e}")
 
     def start_digital_amber(self, mode="lineart"):
         trigger_abort()
